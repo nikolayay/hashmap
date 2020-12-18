@@ -20,10 +20,17 @@ int main(void)
    static int i[WORDS];
 
    a = assoc_init(0);
+
+   // testy testy
+   test();
+
    fp = nfopen("eng_370k_shuffle.txt", "rt");
    for (j = 0; j < WORDS; j++)
    {
-      printf("running wordk %d\n", j);
+      if (j % 10000 == 0)
+      {
+         // printf("read in %d words\n", j);
+      }
       assert(assoc_count(a) == j);
       i[j] = j;
       if (fscanf(fp, "%s", strs[j]) != 1)
@@ -66,6 +73,7 @@ int main(void)
    */
    srand(time(NULL));
    a = assoc_init(sizeof(int));
+
    for (j = 0; j < NUMRANGE; j++)
    {
       i[j] = rand() % NUMRANGE;

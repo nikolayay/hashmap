@@ -2,6 +2,10 @@
     "C_Cpp.intelliSenseEngineFallback": "Enabled",
     "files.associations": {
         "*.html": "vue-html",
-        "__locale": "c"
+        "__locale": "c",
+        "__bit_reference": "c",
+        "__split_buffer": "c",
+        "string": "c",
+        "vector": "c"
     }
 }

@@ -26,7 +26,7 @@ assoc *assoc_init(int keysize);
    - may cause resize, therefore 'a' might
    be changed due to a realloc() etc.
 */
-void assoc_insert(assoc **a, void *key, void *data);
+void assoc_insert(assoc **a, void *key, void *value);
 
 /*
    Returns the number of key/data pairs
@@ -42,3 +42,5 @@ void *assoc_lookup(assoc *a, void *key);
 
 /* Free up all allocated space from 'a' */
 void assoc_free(assoc *a);
+
+void test();

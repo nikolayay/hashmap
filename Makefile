@@ -1,5 +1,5 @@
 CC=gcc
-COMMON= -g3 -Wall -Wextra -Wfloat-equal -pedantic -std=c90 -Wpointer-arith
+COMMON= -g3 -Wall -Wextra -Wfloat-equal -pedantic -std=c99 -Wpointer-arith
 DEBUG= -g3
 SANITIZE= $(COMMON) -fsanitize=undefined -fsanitize=address $(DEBUG)
 VALGRIND= $(COMMON) $(DEBUG)

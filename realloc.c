@@ -7,26 +7,7 @@
    we'll need to use either memcmp() or strcmp()
 */
 
-static unsigned int hash(void *key)
-{
-    return 0;
-}
-
-static unsigned int hash_str(char *key)
-{
-    unsigned long hash = 5381;
-    int c;
-
-    while ((c = *key++))
-    {
-
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-    }
-
-    return hash;
-}
-
-assoc *assoc_init(int keysize)
+static assoc *internal_assoc_init(int size)
 {
 
     int i;
@@ -35,78 +16,122 @@ assoc *assoc_init(int keysize)
     if (!t)
         return NULL;
 
-    if ((t->table = malloc(START_SIZE * sizeof(assoc_element *))) == NULL)
-    {
-        free(t->table);
-        return NULL;
-    }
+    t->n = 0;
+    t->size = size;
 
-    t->keysize = keysize;
-    t->e_num = 0;
-    t->size = START_SIZE;
+    t->table = malloc(t->size * sizeof(assoc_element *));
 
-    for (i = 0; i < START_SIZE; i++)
+    assert(t->table != NULL);
+
+    for (i = 0; i < (int)t->size; i++)
         t->table[i] = NULL;
 
     return t;
 }
 
-void assoc_insert_string(assoc **a, char *key, void *data)
+static unsigned int hash(const char *key)
 {
-    assoc *t = *a;
+    unsigned long hash = 5381;
+    int c;
 
-    unsigned int h = hash_str(key) % t->size;
-    assoc_element *e = t->table[h];
-
-    while (e != NULL)
+    while ((c = *key++))
     {
-        if (!strcmp(e->key, key))
+
+        hash = ((hash << 5) + hash) + c;
+    }
+
+    return hash;
+}
+
+static int compare_keys(assoc *a, void *k1, void *k2)
+{
+    return a->keysize == 0 ? !strcmp(k1, k2) : !memcmp(k1, k2, (size_t)a->keysize);
+}
+
+static void grow(assoc *a)
+{
+    assoc *a2;
+    assoc swap;
+
+    unsigned int i;
+    assoc_element *e;
+
+    a2 = internal_assoc_init(a->size * GROWTH_FACTOR);
+
+    assert(a2->size == a->size * GROWTH_FACTOR);
+
+    for (i = 0; i < a->size; i++)
+    {
+        for (e = a->table[i]; e != 0; e = e->next)
         {
-            e->data = data;
+            assoc_insert(&a2, e->key, e->value);
         }
-        e = e->next;
     }
 
-    /* the key doesn't already exist */
-    e = malloc(sizeof(assoc_element));
-    e->key = malloc(strlen(key) + 1);
+    swap = *a;
+    *a = *a2;
+    *a2 = swap;
 
-    strcpy(e->key, key);
-    e->data = data;
+    assoc_free(a2);
+}
 
-    /* Add the element at the beginning of the linked list */
-    e->next = t->table[h];
-    t->table[h] = e;
-    t->e_num++;
+assoc *assoc_init(int keysize)
+{
+    assoc *a = internal_assoc_init(INIT_SIZE);
+    a->keysize = keysize;
+    return a;
+}
 
-    /* todo realloc here */
-    if (t->e_num + 1 >= t->size)
+void assoc_insert(assoc **a, void *key, void *value)
+{
+
+    assoc *t = *a;
+    assoc_element *e;
+    unsigned int h;
+
+    assert(key);
+    //assert(value);
+    e = malloc(sizeof(*e));
+    assert(e);
+
+    h = hash(key) % t->size;
+
+    assoc_element *el;
+
+    for (el = t->table[h]; el != 0; el = el->next)
     {
+        if (compare_keys(t, el->key, key))
+        {
+            return;
+        }
     }
-}
 
-void assoc_insert_bytes(assoc **a, void *key, void *data)
-{
-    assoc *t = *a;
-}
-
-/*
-   Insert key/data pair
-   - may cause resize, therefore 'a' might
-   be changed due to a realloc() etc.
-*/
-void assoc_insert(assoc **a, void *key, void *data)
-{
-    assoc *t = *a;
-
-    /* key is a string */
     if (t->keysize == 0)
     {
-        assoc_insert_string(a, key, data);
+        e->key = strdup(key);
+        e->value = malloc(sizeof(void *));
+        memcpy(e->key, key, strlen(key));
     }
     else
     {
-        assoc_insert_bytes(a, key, data);
+        e->key = malloc((size_t)t->keysize);
+        e->value = malloc(sizeof(void *));
+        memcpy(e->key, key, t->keysize);
+    }
+
+    if (value)
+    {
+        memcpy(e->value, value, sizeof(void *));
+    }
+
+    e->next = t->table[h];
+    t->table[h] = e;
+
+    t->n++;
+
+    if (t->n >= t->size * MAX_LOAD_FACTOR)
+    {
+        grow(t);
     }
 }
 
@@ -116,7 +141,7 @@ void assoc_insert(assoc **a, void *key, void *data)
 */
 unsigned int assoc_count(assoc *a)
 {
-    return a->e_num;
+    return a->n;
 }
 
 /*
@@ -125,11 +150,46 @@ unsigned int assoc_count(assoc *a)
 */
 void *assoc_lookup(assoc *a, void *key)
 {
-    return NULL;
+    assoc_element *e;
+
+    for (e = a->table[hash(key) % a->size]; e != 0; e = e->next)
+    {
+        // same string
+        if (compare_keys(a, e->key, key))
+        {
+            return e->value;
+        }
+    }
+
+    return 0;
 }
 
 /* Free up all allocated space from 'a' */
 void assoc_free(assoc *a)
 {
+    unsigned int i;
+    assoc_element *e;
+    assoc_element *next;
+
+    for (i = 0; i < a->size; i++)
+    {
+        for (e = a->table[i]; e != NULL; e = next)
+        {
+            next = e->next;
+
+            free(e->key);
+            free(e->value);
+            free(e);
+        }
+    }
+
+    free(a->table);
     free(a);
+}
+
+void test()
+{
+    assert(hash("farandoles") == 1561596836);
+
+    printf("all unit tests pass\n");
 }
